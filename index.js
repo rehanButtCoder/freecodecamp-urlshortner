@@ -6,13 +6,11 @@ const dns = require('dns').promises;
 const { MongoClient } = require('mongodb');
 const app = express();
 
-// Basic Configuration
 const port = process.env.PORT || 3000;
-const mongoUri = 'mongodb+srv://rehanbutt15555:GWhDALqTwve3QEML@cluster0.9z7ksf8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0' || 'mongodb://localhost:27017';
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const dbName = 'urlshortener';
 let db;
 
-// MongoDB Connection
 async function connectToMongo() {
   try {
     const client = new MongoClient(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -25,32 +23,26 @@ async function connectToMongo() {
   }
 }
 
-// Middleware
 app.use(cors());
 app.use('/public', express.static(`${process.cwd()}/public`));
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// Root route
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-// Hello API endpoint
 app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-// POST endpoint to create short URL
 app.post('/api/shorturl', async function(req, res) {
   const originalUrl = req.body.url;
 
-  // Validate URL format
   const urlRegex = /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
   if (!urlRegex.test(originalUrl)) {
     return res.json({ error: 'invalid url' });
   }
 
-  // Extract hostname for DNS lookup
   let hostname;
   try {
     hostname = new URL(originalUrl).hostname;
@@ -58,12 +50,10 @@ app.post('/api/shorturl', async function(req, res) {
     return res.json({ error: 'invalid url' });
   }
 
-  // Validate URL with dns.lookup
   try {
     await dns.lookup(hostname);
     const urlsCollection = db.collection('urls');
 
-    // Check if URL already exists
     const existingUrl = await urlsCollection.findOne({ original_url: originalUrl });
     if (existingUrl) {
       return res.json({
@@ -72,11 +62,9 @@ app.post('/api/shorturl', async function(req, res) {
       });
     }
 
-    // Get the next short_url
     const counter = await urlsCollection.countDocuments();
     const shortUrl = counter + 1;
 
-    // Store URL in MongoDB
     await urlsCollection.insertOne({
       original_url: originalUrl,
       short_url: shortUrl
@@ -91,7 +79,6 @@ app.post('/api/shorturl', async function(req, res) {
   }
 });
 
-// GET endpoint to redirect to original URL
 app.get('/api/shorturl/:short_url', async function(req, res) {
   const shortUrl = parseInt(req.params.short_url, 10);
 
@@ -113,7 +100,6 @@ app.get('/api/shorturl/:short_url', async function(req, res) {
   }
 });
 
-// Connect to MongoDB and start server
 connectToMongo().then(() => {
   app.listen(port, function() {
     console.log(`Listening on port ${port}`);
